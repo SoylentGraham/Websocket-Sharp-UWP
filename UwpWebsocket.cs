@@ -102,6 +102,10 @@ namespace WebSocketSharp
 				return true;
 			}
 		}
+        void JustCallOnClose(GameObject sender,CloseEventArgs e)
+        {
+			OnClose.Invoke(sender,e);
+        }
 
 		void OnMessageRecieved(MessageWebSocket FromSocket, MessageWebSocketMessageReceivedEventArgs InputMessage)
 		{
@@ -121,6 +125,8 @@ namespace WebSocketSharp
 			
 			OnMessage.Invoke( this, OutputMessage );
 		}
+
+
 
 	
 		async Task	SendAsyncTask(string message)
@@ -159,9 +165,11 @@ namespace WebSocketSharp
 			};
 		}
 
+
+
 		public void SendAsync(string data, System.Action<bool> completed)
 		{
-			ThreadPool.RunAsync( (Handler)=>
+			var ThreadPromise = ThreadPool.RunAsync( (Handler)=>
 			{
 				lock(SendLock)
 				{
@@ -177,16 +185,16 @@ namespace WebSocketSharp
 
 		public void SendAsync(byte[] data, System.Action<bool> completed)
 		{
-			ThreadPool.RunAsync( (Handler)=>
-			{
-				lock(SendLock)
-				{
-					var SendTask = SendAsyncTask( data );
-					SendTask.Wait();
-					completed.Invoke(true);
-				};
-				//await Send_Async(data);
-			});
+			var ThreadPromise = ThreadPool.RunAsync((Handler) =>
+		   {
+			   lock (SendLock)
+			   {
+				   var SendTask = SendAsyncTask(data);
+				   SendTask.Wait();
+				   completed.Invoke(true);
+			   };
+			   //await Send_Async(data);
+		   });
 			
 			
 			//completed.Invoke(true);
@@ -195,7 +203,7 @@ namespace WebSocketSharp
 		
 		public void ConnectAsync ()
 		{
-			StartAsync();
+			var ThreadPromise = StartAsync();
 		}
 
 		public void Close()
@@ -257,12 +265,10 @@ namespace WebSocketSharp
 				// URI is self-signed and has subject name = fabrikam.com
 				streamWebSocket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
 				streamWebSocket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
-
 				// Add event handler to listen to the ServerCustomValidationRequested event. This enables performing
 				// custom validation of the server certificate. The event handler must implement the desired
 				// custom certificate validation logic.
 				streamWebSocket.ServerCustomValidationRequested += OnServerCustomValidationRequested;
-
 				// Certificate validation is meaningful only for secure connections.
 				if (server.Scheme != "wss")
 				{
@@ -296,7 +302,6 @@ namespace WebSocketSharp
 			try
 			{
 				byte[] readBuffer = new byte[1000];
-
 				while (true)
 				{
 					if (socket != activeSocket)
@@ -304,7 +309,6 @@ namespace WebSocketSharp
 						// Our socket is no longer active. Stop reading.
 						return;
 					}
-
 					//	gr: work out where messages split!
 					int BytesRead = await readStream.ReadAsync(readBuffer, 0, readBuffer.Length);
 				
@@ -318,20 +322,17 @@ namespace WebSocketSharp
 			catch (Exception ex)
 			{
 				WebErrorStatus status = WebSocketError.GetStatus(ex.GetBaseException().HResult);
-
 				switch (status)
 				{
 					case WebErrorStatus.OperationCanceled:
 						OnError.Invoke( this, new ErrorEventArgs("Background read canceled.") );
 						break;
-
 					default:
 						OnError.Invoke( this, new ErrorEventArgs("Read error: " + status + "; " + ex.Message) );
 						break;
 				}
 			}
 		}
-
 		private async Task SendDataAsync(StreamWebSocket activeSocket)
 		{
 			try
@@ -344,14 +345,12 @@ namespace WebSocketSharp
 						// Our socket is no longer active. Stop sending.
 						return;
 					}
-
 					if ( SendQueue == null || SendQueue.Count == 0 )
 					{
 						//	sleep thread plx
 						await Task.Delay( TimeSpan.FromMilliseconds(500) );
 						continue;
 					}
-
 					byte[] SendBuffer = null;
 					lock(SendQueue)
 					{
@@ -364,13 +363,11 @@ namespace WebSocketSharp
 			catch (Exception ex)
 			{
 				WebErrorStatus status = WebSocketError.GetStatus(ex.GetBaseException().HResult);
-
 				switch (status)
 				{
 					case WebErrorStatus.OperationCanceled:
 						OnError.Invoke( this, new ErrorEventArgs("Background write canceled.") );
 						break;
-
 					default:
 						OnError.Invoke( this, new ErrorEventArgs("Error " + status + " exception: " + ex.Message ) );
 						break;
